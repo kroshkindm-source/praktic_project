@@ -1,0 +1,7 @@
+build/
+.vscode/
+.venv/
+*.txt
+docker-compose.yml
+.env
+
