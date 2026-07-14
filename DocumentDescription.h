@@ -1,4 +1,4 @@
-#pragma once
+﻿#pragma once
 #include <string>
 #include <vector>
 #include <optional>
@@ -28,6 +28,13 @@ public:
     // "dbname=ocr_db user=postgres password=postgres host=localhost port=5432"
     explicit DocumentDescriptionRepository(const std::string& connectionString);
 
+    // Создаёт таблицу documents в базе данных, если её ещё нет.
+    // Это родительская таблица: на неё ссылаются внешние ключи таблиц
+    // document_descriptions и extracted_fields, поэтому её необходимо
+    // создавать ПЕРВОЙ, до вызова createTable() (как этого класса,
+    // так и FieldExtractionService).
+    void createDocumentsTable();
+
     // Создаёт таблицу document_descriptions в базе данных, если её ещё нет.
     // Вызывать один раз при первом запуске программы.
     void createTable();
@@ -42,9 +49,11 @@ public:
     // будет фактически сохранён и обработан.
     int addEmptyDocument();
 
-    // Добавляет новую запись: описание документа от ИИ и описание,
-    // собранное из регулярных выражений. Возвращает id новой записи.
-    int create(int documentId, const std::string& aiDescription, const std::string& regexDescription);
+    // Добавляет новую запись: исходный текст документа (полученный от OCR),
+    // описание документа от ИИ и описание, собранное из регулярных
+    // выражений. Возвращает id новой записи.
+    int create(int documentId, const std::string& originalDocument,
+        const std::string& aiDescription, const std::string& regexDescription);
 
     // Возвращает описание конкретного документа, если оно есть в базе.
     // Если для документа ещё ничего не сохранено — возвращает "пусто" (std::nullopt).
@@ -57,9 +66,9 @@ public:
     // Возвращает true, если запись действительно была удалена.
     bool remove(int id);
 
-    void addPath(int ID, const std::string& newPath){
+    void addPath(int ID, const std::string& newPath) {
         pqxx::work tx(connection_);
-        tx.exec("UPDATE documents SET file_path =" +tx.quote(newPath)+" WHERE id = " + tx.quote(ID));
+        tx.exec("UPDATE documents SET file_path =" + tx.quote(newPath) + " WHERE id = " + tx.quote(ID));
         tx.commit();
     }
 

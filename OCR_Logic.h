@@ -1,4 +1,4 @@
-#pragma once 
+﻿#pragma once 
 #ifndef OCR_LOGIC_H
 #define OCR_LOGIC_H
 

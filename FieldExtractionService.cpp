@@ -1,7 +1,45 @@
-#include "FieldExtractionService.h"
+﻿#include "FieldExtractionService.h"
 #include <pqxx/pqxx>
 #include <regex>
 #include <string>
+
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <Windows.h>   // подключается ПОСЛЕ pqxx/pqxx во избежание конфликта winsock.h/winsock2.h
+
+// ============================================================================
+// Вспомогательные функции преобразования UTF-8 <-> UTF-16 (wchar_t).
+// Требуются только для extractInvoiceNumber: диапазон [А-Я][а-я] корректно
+// работает лишь при посимвольном (не побайтовом) разборе строки.
+// ============================================================================
+namespace {
+    std::wstring utf8ToWide(const std::string& utf8) {
+        if (utf8.empty()) return std::wstring();
+        int wideLen = MultiByteToWideChar(
+            CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), nullptr, 0);
+        if (wideLen <= 0) return std::wstring();
+
+        std::wstring wide(static_cast<size_t>(wideLen), L'\0');
+        MultiByteToWideChar(
+            CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()), wide.data(), wideLen);
+        return wide;
+    }
+
+    std::string wideToUtf8(const std::wstring& wide) {
+        if (wide.empty()) return std::string();
+        int utf8Len = WideCharToMultiByte(
+            CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
+            nullptr, 0, nullptr, nullptr);
+        if (utf8Len <= 0) return std::string();
+
+        std::string utf8(static_cast<size_t>(utf8Len), '\0');
+        WideCharToMultiByte(
+            CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()),
+            utf8.data(), utf8Len, nullptr, nullptr);
+        return utf8;
+    }
+}
+
 
 // Конструктор. Здесь происходит подключение к базе данных — один раз,
 // при создании объекта FieldExtractionService.
@@ -85,41 +123,44 @@ int FieldExtractionService::saveField(int documentId, const std::string& fieldNa
 // ============================================================================
 
 std::optional<std::string> FieldExtractionService::extractInvoiceNumber(const std::string& text) const {
-    // Шаблон ищет: букву N или знак № (без учёта регистра),
-    // затем, возможно, двоеточие или дефис, затем сам номер счёта.
-    // Пример подходящего текста: "№ INV-2024-0001", "N: A1-2024"
-    static const std::regex pattern(
-        R"([N№]\s*[:\-]?\s*([A-Za-zА-Яа-я0-9][A-Za-zА-Яа-я0-9\-\/]{2,20}))",
-        std::regex::icase // не учитывать регистр букв (N и n — одно и то же)
+    // std::wregex: один элемент строки = один символ (code unit UTF-16),
+    // поэтому диапазоны [А-Я] и [а-я] интерпретируются как диапазон букв,
+    // а не диапазон байт — совпадение никогда не "разрезает" символ пополам.
+    static const std::wregex pattern(
+        LR"([N№]\s*[:\-]?\s*([A-Za-zА-Яа-я0-9][A-Za-zА-Яа-я0-9\-\/]{2,20}))",
+        std::regex::icase
     );
 
-    std::smatch match; // сюда попадёт результат поиска, если он будет найден
-    if (std::regex_search(text, match, pattern) && match.size() > 1) {
-        return match[1].str(); // возвращаем найденный номер (без слова "№")
+    std::wstring wideText = utf8ToWide(text); // UTF-8 -> UTF-16 перед матчингом
+
+    std::wsmatch match;
+    if (std::regex_search(wideText, match, pattern) && match.size() > 1) {
+        return wideToUtf8(match[1].str()); // обратно в UTF-8 для записи в PostgreSQL
     }
-    return std::nullopt; // ничего не нашли
+    return std::nullopt;
 }
 
 std::optional<std::string> FieldExtractionService::extractDate(const std::string& text) const {
-    // Шаблон ищет три группы цифр, разделённые точкой, дефисом или слэшем:
-    // день (1-2 цифры), месяц (1-2 цифры), год (2-4 цифры).
-    // Пример подходящего текста: "15.03.2024", "15-03-24", "15/03/2024"
+    // Без изменений: шаблон использует только ASCII (цифры, '.', '-', '/').
+    // Такие байты в UTF-8 никогда не входят в состав многобайтовых
+    // последовательностей, поэтому побайтовый std::regex работает корректно.
     static const std::regex pattern(
         R"((\d{1,2})\s*[.\-\/]\s*(\d{1,2})\s*[.\-\/]\s*(\d{2,4}))"
     );
 
     std::smatch match;
     if (std::regex_search(text, match, pattern)) {
-        // Собираем найденную дату обратно в привычном формате "день.месяц.год"
         return match[1].str() + "." + match[2].str() + "." + match[3].str();
     }
     return std::nullopt;
 }
 
 std::optional<std::string> FieldExtractionService::extractAmount(const std::string& text) const {
-    // Шаблон ищет число (с возможными пробелами внутри и дробной частью
-    // через точку или запятую), после которого идёт слово "руб" или знак "₽".
-    // Пример подходящего текста: "15000 руб.", "1 500,50 руб", "2300 ₽"
+    // Без изменений: захватываемая группа состоит только из ASCII (цифры,
+    // пробел, '.', ','); литералы "руб"/"₽" сравниваются как точная
+    // последовательность байт, а не как символьный диапазон, поэтому
+    // побайтовое сравнение корректно при условии, что сам исходный файл
+    // сохранён в UTF-8 с BOM и компилируется с флагом /utf-8.
     static const std::regex pattern(
         R"((\d[\d\s]*[.,]?\d*)\s*(?:руб\.?|₽))",
         std::regex::icase
@@ -127,10 +168,11 @@ std::optional<std::string> FieldExtractionService::extractAmount(const std::stri
 
     std::smatch match;
     if (std::regex_search(text, match, pattern) && match.size() > 1) {
-        return match[1].str(); // возвращаем только число, без слова "руб"
+        return match[1].str();
     }
     return std::nullopt;
 }
+
 
 // ============================================================================
 // Главный метод: принимает текст документа и id самого документа,

@@ -1,4 +1,4 @@
-#include "DocumentDescription.h"
+﻿#include "DocumentDescription.h"
 #include <pqxx/pqxx>
 #include <string>
 
@@ -6,6 +6,26 @@
 // при создании объекта DocumentDescriptionRepository.
 DocumentDescriptionRepository::DocumentDescriptionRepository(const std::string& connectionString)
     : connection_(connectionString) {
+}
+
+// Создаёт таблицу documents, если она ещё не существует.
+// Это родительская таблица для document_descriptions и extracted_fields —
+// обе ссылаются на неё через внешний ключ document_id, поэтому данный
+// метод должен вызываться раньше их createTable().
+void DocumentDescriptionRepository::createDocumentsTable() {
+    pqxx::work txn(connection_);
+    txn.exec(
+        "CREATE TABLE IF NOT EXISTS documents ("
+        "id SERIAL PRIMARY KEY,"
+        "user_id INT NOT NULL,"
+        "original_filename TEXT NOT NULL,"
+        "file_path TEXT NOT NULL,"
+        "file_type VARCHAR(20) NOT NULL,"
+        "file_size BIGINT NOT NULL DEFAULT 0,"
+        "created_at TIMESTAMP NOT NULL DEFAULT NOW()"
+        ");"
+    );
+    txn.commit();
 }
 
 // Создаёт таблицу document_descriptions, если она ещё не существует.
@@ -16,7 +36,7 @@ void DocumentDescriptionRepository::createTable() {
     txn.exec(
         "CREATE TABLE IF NOT EXISTS document_descriptions ("
         "id SERIAL PRIMARY KEY,"                                                 // номер записи, создаётся автоматически
-        "document_id INT NOT NULL REFERENCES documents(id) ON DELETE CASCADE," 
+        "document_id INT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,"
         "original_document TEXT NOT NULL,"  // ссылка на документ; если документ удалят, описание удалится тоже
         "ai_description TEXT NOT NULL,"                                          // описание от ИИ
         "regex_description TEXT NOT NULL,"                                       // описание из регулярных выражений
@@ -28,18 +48,18 @@ void DocumentDescriptionRepository::createTable() {
 
 // Добавляет новую запись в таблицу и возвращает id, который база данных
 // присвоила этой записи.
-int DocumentDescriptionRepository::create(int documentId, const std::string& aiDescription,
-    const std::string& regexDescription) {
+int DocumentDescriptionRepository::create(int documentId, const std::string& originalDocument,
+    const std::string& aiDescription, const std::string& regexDescription) {
     pqxx::work txn(connection_);
 
-    // $1, $2, $3 — это "заглушки" для значений. Они безопасно подставляются
+    // $1, $2, $3, $4 — это "заглушки" для значений. Они безопасно подставляются
     // библиотекой pqxx через pqxx::params, поэтому текст описания не может
     // случайно сломать SQL-запрос (даже если в нём есть кавычки или другие
     // спецсимволы).
     pqxx::result res = txn.exec(
-        "INSERT INTO document_descriptions (document_id, ai_description, regex_description) "
-        "VALUES ($1, $2, $3) RETURNING id;",
-        pqxx::params{ documentId, aiDescription, regexDescription }
+        "INSERT INTO document_descriptions (document_id, original_document, ai_description, regex_description) "
+        "VALUES ($1, $2, $3, $4) RETURNING id;",
+        pqxx::params{ documentId, originalDocument, aiDescription, regexDescription }
     );
     txn.commit();
     return res[0][0].as<int>(); // достаём id только что созданной записи
@@ -65,8 +85,6 @@ namespace {
 }
 
 
-// Ищет в базе данных описание конкретного документа.
-// Если для этого документа ещё ничего не сохранено — возвращает std::nullopt.
 // Ищет в базе данных описание конкретного документа.
 // Если для этого документа ещё ничего не сохранено — возвращает std::nullopt.
 std::optional<DocumentDescription> DocumentDescriptionRepository::getByDocumentId(int documentId) {
@@ -104,7 +122,7 @@ int DocumentDescriptionRepository::addEmptyDocument() {
     // document_descriptions, поэтому запись здесь должна появиться первой.
     // Значения ниже — временные заглушки, так как на момент создания
     // пустого документа реальные данные файла (имя, путь, размер) ещё
-    // неизвестны. При необходимостяёи они обновляются позже, отдельным
+    // неизвестны. При необходимости они обновляются позже, отдельным
     // методом обновления записи.
     pqxx::result docRes = tx.exec(
         "INSERT INTO documents (user_id, original_filename, file_path, file_type, file_size) "
@@ -116,10 +134,13 @@ int DocumentDescriptionRepository::addEmptyDocument() {
     // Шаг 2. Создаём связанную "заготовку" описания в document_descriptions,
     // ссылающуюся на только что созданный документ через document_id.
     // Именно эту запись впоследствии найдёт repo.getByDocumentId(documentId).
+    // На этом этапе реальный текст документа ещё не получен (OCR ещё не
+    // выполнялся), поэтому для original_document также используется
+    // временная заглушка — она будет заменена позже, при вызове create().
     tx.exec(
-        "INSERT INTO document_descriptions (document_id, ai_description, regex_description) "
-        "VALUES ($1, $2, $3);",
-        pqxx::params{ documentId, "В процессе обработки...", "В процессе обработки..." }
+        "INSERT INTO document_descriptions (document_id, original_document, ai_description, regex_description) "
+        "VALUES ($1, $2, $3, $4);",
+        pqxx::params{ documentId, "Ожидает обработки...", "В процессе обработки...", "В процессе обработки..." }
     );
 
     tx.commit();
@@ -128,4 +149,3 @@ int DocumentDescriptionRepository::addEmptyDocument() {
     // дальше в пайплайне (имя файла изображения, повторный поиск описания).
     return documentId;
 }
-

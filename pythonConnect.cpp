@@ -1,4 +1,4 @@
-#include <array>
+﻿#include <array>
 #include <memory>
 #include <iostream>
 #include "pythonConnect.h"
@@ -7,9 +7,9 @@ std::string getPythonResult(const std::string& cmd) {
     std::array<char, 4096> buffer;
     std::string result;
     // pclose закроет поток и вернет статус выполнения
-    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(cmd.c_str(), "r"), pclose);
+    std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(cmd.c_str(), "r"), _pclose);
     if (!pipe) return "";
-    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe.get()) != nullptr) {
         result += buffer.data();
     }
     return result;
