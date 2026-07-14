@@ -4,7 +4,6 @@
 #include <string>
 
 #define WIN32_LEAN_AND_MEAN
-#define NOMINMAX
 #include <Windows.h>   // подключается ПОСЛЕ pqxx/pqxx во избежание конфликта winsock.h/winsock2.h
 
 // ============================================================================

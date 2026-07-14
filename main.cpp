@@ -2,18 +2,38 @@
 #include <string>
 #include <memory>
 #include <cstdlib>
+#include <limits> // Обязательно для numeric_limits
+
 #include "OCR_Logic.h"
 #include "DocumentDescription.h"
-#include "FieldExtractionService.h" // модуль с регулярными выражениями
+#include "FieldExtractionService.h"
 #include "pythonConnect.h"
 #include "Start.h"
 
 using namespace std;
 
+// Инициализируем БД один раз при запуске программы
+void initializeDatabase(const string& connStr) {
+    DocumentDescriptionRepository repo(connStr);
+    FieldExtractionService extractionService(connStr);
+    
+    repo.createDocumentsTable();
+    repo.createTable();
+    extractionService.createTable();
+}
 
 int main() {
-    // Установка кодировки один раз для всей программы
+    // Установка кодировки
     system("chcp 65001 >nul");
+
+    const string connStr = "host=127.0.0.1 dbname=postgres user=postgres";
+    
+    try {
+        initializeDatabase(connStr);
+    } catch (const exception& e) {
+        cerr << "Критическая ошибка инициализации БД: " << e.what() << endl;
+        return 1;
+    }
 
     int choice = 0;
     bool running = true;
@@ -24,55 +44,48 @@ int main() {
         cout << "0. Завершить программу" << endl;
         cout << "Введите выбор: ";
 
-        cin >> choice;
-        // Очистка буфера после cin, чтобы getline работал корректно
+        if (!(cin >> choice)) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n');
+            continue;
+        }
         cin.ignore(numeric_limits<streamsize>::max(), '\n');
 
         switch (choice) {
         case 1: {
+            string filePath;
+            cout << "Введите путь к файлу: ";
+            getline(cin, filePath);
+
+            if (filePath.empty()) {
+                cerr << "Ошибка: Путь к файлу не может быть пустым" << endl;
+                break;
+            }
+
             try {
-                string filePath;
-                cout << "Введите путь к файлу: ";
-                getline(cin, filePath);
-
-                if (filePath.empty()) {
-                    throw runtime_error("Путь к файлу не может быть пустым");
-                }
-
-                // Строка подключения без пароля: аутентификация на стороне
-                // PostgreSQL должна быть настроена в pg_hba.conf на метод "trust"
-                // для данного хоста/пользователя, иначе сервер отклонит подключение.
-                string connStr = "host=127.0.0.1 dbname=postgres user=postgres";
-
                 DocumentDescriptionRepository repo(connStr);
                 FieldExtractionService extractionService(connStr);
-
-                // Порядок вызовов важен: сначала создаётся родительская
-                // таблица documents, и только после неё — таблицы,
-                // ссылающиеся на неё через внешний ключ (document_id).
-                repo.createDocumentsTable();
-                repo.createTable();
-                extractionService.createTable();
 
                 int targetId = repo.addEmptyDocument();
                 repo.addPath(targetId, filePath);
 
+                // OCR обработка
                 string resultTxt = ocrLogic(targetId, filePath, repo);
-                string ocrText = readTextFile(resultTxt);
-                ocrText = sanitizeUtf8(ocrText); // очищаем текст OCR от повреждённых байт перед дальнейшей обработкой
+                string ocrText = sanitizeUtf8(readTextFile(resultTxt));
 
+                // Регулярные выражения
                 auto extractedFields = extractionService.extractAndSave(targetId, ocrText);
                 cout << "Регулярными выражениями найдено полей: " << extractedFields.size() << endl;
 
-                string command = "python test.py " + resultTxt;
+                // Вызов Python
+                string command = "python test.py \"" + filePath + "\"";
                 string aiData = getPythonResult(command);
 
                 if (!aiData.empty()) {
-                    repo.create(targetId, ocrText, aiData, "автоматический анализ");
-                    cout << "Успех! Данные записаны в БД." << endl;
-                }
-                else {
-                    cerr << "ИИ ничего не вернул." << endl;
+                    repo.update(targetId, ocrText, aiData, "автоматический анализ"); 
+                    cout << "Успех! Данные обновлены в БД." << endl;
+                } else {
+                    cerr << "Предупреждение: ИИ не вернул данных." << endl;
                 }
             }
             catch (const exception& e) {
@@ -83,11 +96,10 @@ int main() {
 
         case 0:
             running = false;
-            cout << "Завершение программы..." << endl;
             break;
 
         default:
-            cout << "Неверный выбор, попробуйте снова." << endl;
+            cout << "Неверный выбор." << endl;
             break;
         }
     } while (running);

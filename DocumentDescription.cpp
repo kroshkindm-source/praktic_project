@@ -137,11 +137,17 @@ int DocumentDescriptionRepository::addEmptyDocument() {
     // На этом этапе реальный текст документа ещё не получен (OCR ещё не
     // выполнялся), поэтому для original_document также используется
     // временная заглушка — она будет заменена позже, при вызове create().
+    // Замените обычные строки на строки с префиксом u8
     tx.exec(
         "INSERT INTO document_descriptions (document_id, original_document, ai_description, regex_description) "
         "VALUES ($1, $2, $3, $4);",
-        pqxx::params{ documentId, "Ожидает обработки...", "В процессе обработки...", "В процессе обработки..." }
-    );
+        pqxx::params{ 
+            documentId, 
+            "Ожидает обработки...", 
+            "В процессе обработки...", 
+            "В процессе обработки..." 
+        }
+);
 
     tx.commit();
 

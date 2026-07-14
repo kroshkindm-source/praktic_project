@@ -59,6 +59,18 @@ public:
     // Если для документа ещё ничего не сохранено — возвращает "пусто" (std::nullopt).
     std::optional<DocumentDescription> getByDocumentId(int documentId);
 
+    void update(int documentId, const std::string& originalDocument, 
+                                          const std::string& aiDescription, const std::string& regexDescription) {
+    pqxx::work txn(connection_);
+    
+    txn.exec(
+        "UPDATE document_descriptions SET original_document = $2, ai_description = $3, regex_description = $4 "
+        "WHERE document_id = $1;",
+        pqxx::params{ documentId, originalDocument, aiDescription, regexDescription }
+    );
+    
+        txn.commit();
+    }
     // Возвращает все записи из таблицы document_descriptions.
     std::vector<DocumentDescription> getAll();
 

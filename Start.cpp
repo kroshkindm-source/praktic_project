@@ -1,11 +1,13 @@
 ﻿#include "Start.h"
+#include <fstream>
 using namespace std;
 
 // Читает весь текстовый файл в одну строку
 string readTextFile(const string& path) {
-    ifstream file(path);
+    // Открываем как binary, чтобы не было никаких трансформаций символов перевода строки
+    ifstream file(path, std::ios::binary); 
     if (!file.is_open()) {
-        throw runtime_error("Не удалось открыть файл с результатом OCR: " + path);
+        throw runtime_error("Не удалось открыть файл: " + path);
     }
     stringstream buffer;
     buffer << file.rdbuf();
