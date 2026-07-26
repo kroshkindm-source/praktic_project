@@ -89,7 +89,20 @@ def document_list(request):
     return render(request, 'documents/document_list.html', {
         'descriptions': descriptions,
         'query': query,
+        'is_admin': request.user.is_superuser,
     })
+
+
+@login_required
+def delete_document(request, doc_id):
+    if not request.user.is_superuser:
+        messages.error(request, 'Только администратор может удалять документы.')
+        return redirect('document_list')
+    
+    doc = get_object_or_404(Document, id=doc_id)
+    doc.delete()
+    messages.success(request, f'Документ #{doc_id} удалён.')
+    return redirect('document_list')
 
 
 @login_required
