@@ -1,0 +1,27 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Документ #{{ desc.document_id }}</h2>
+<p><strong>Файл:</strong> {{ desc.document.original_filename }}</p>
+<p><strong>Тип:</strong> {{ desc.document.file_type }}</p>
+<p><strong>Дата:</strong> {{ desc.created_at|date:"d.m.Y H:i" }}</p>
+
+<h3>Описание от ИИ:</h3>
+<pre style="background:#f8f9fa;padding:10px;overflow-x:auto;">{{ desc.ai_description }}</pre>
+
+<h3>Regex-описание:</h3>
+<pre style="background:#f8f9fa;padding:10px;overflow-x:auto;">{{ desc.regex_description }}</pre>
+
+{% if fields %}
+<h3>Извлечённые поля</h3>
+<table>
+    <thead><tr><th>Поле</th><th>Значение</th></tr></thead>
+    <tbody>
+        {% for f in fields %}
+        <tr><td>{{ f.field_name }}</td><td>{{ f.field_value }}</td></tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<a href="{% url 'document_list' %}" class="btn" style="margin-top:20px;">← Назад</a>
+{% endblock %}

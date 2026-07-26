@@ -1,7 +1,32 @@
-build/
-.vscode/
+# Виртуальное окружение
 .venv/
-*.txt
-docker-compose.yml
+venv/
+env/
+
+# Файлы с секретами
 .env
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Django
+*.log
+db.sqlite3
+/media/
+
+# Скомпилированные файлы
+*.o
+*.obj
+
+# IDE
+.vscode/
+.idea/
+
+# База данных (дампа)
+*.sql
+*.dump

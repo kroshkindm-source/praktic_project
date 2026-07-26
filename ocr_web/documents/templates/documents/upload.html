@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Добавить документ</h2>
+<form method="post" enctype="multipart/form-data" style="max-width:500px;margin-top:20px;">
+    {% csrf_token %}
+    <label style="display:block;margin-bottom:10px;">Выберите файл (изображение):</label>
+    <input type="file" name="document" accept="image/*" id="fileInput" required 
+           style="margin-bottom:15px;">
+    
+    <div id="preview" style="margin-bottom:15px;display:none;">
+        <p><strong>Предпросмотр:</strong></p>
+        <img id="previewImg" src="#" alt="Предпросмотр" 
+             style="max-width:100%;max-height:300px;border:1px solid #ddd;border-radius:5px;">
+    </div>
+    
+    <button type="submit" class="btn">Загрузить и обработать</button>
+</form>
+
+<script>
+document.getElementById('fileInput').onchange = function(e) {
+    var reader = new FileReader();
+    reader.onload = function(event) {
+        document.getElementById('previewImg').src = event.target.result;
+        document.getElementById('preview').style.display = 'block';
+    }
+    reader.readAsDataURL(e.target.files[0]);
+}
+</script>
+
+<a href="{% url 'document_list' %}" class="btn" style="margin-top:15px;background:#95a5a6;">← Назад</a>
+{% endblock %}

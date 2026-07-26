@@ -15,18 +15,12 @@ string ocrLogic(int docId, const string& imagePath, DocumentDescriptionRepositor
     string idStr = to_string(docId);
     string outputName = "doc_" + idStr;
     
-    // 1. Укажите путь к исполняемому файлу tesseract.exe
+    //Путь к исполняемому файлу tesseract
     string tesseractPath = "C:\\Program Files\\Tesseract-OCR\\tesseract.exe";
     
-    // 2. Укажите путь к папке tessdata
+    //Путь к папке tessdata
     string tessDataDir = "C:\\Program Files\\Tesseract-OCR\\tessdata";
 
-    // 3. Формируем правильную команду:
-    // tesseract [входной_файл] [выходной_файл] --tessdata-dir [путь]
-    // Используем кавычки вокруг путей на случай, если в них есть пробелы
-    // Обратите внимание на дополнительные кавычки в начале и конце
-    // 3. Формируем команду с добавлением параметра -l rus
-    // Мы добавляем " -l rus+eng" после имени выходного файла
     string command = "cmd /c \"\"" + tesseractPath + "\" \"" + imagePath + "\" \"" + outputName + "\" -l rus+eng --tessdata-dir \"" + tessDataDir + "\"\"";
 
     int exitcode = system(command.c_str());
