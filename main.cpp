@@ -19,7 +19,7 @@ string readTextFile(const string& path) {
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
-        cerr << "Usage: ocr_app.exe <file_path> <document_id>" << endl;
+        cerr << "Usage: ocr_app.exe <txt_file_path> <document_id>" << endl;
         return 1;
     }
 
@@ -30,11 +30,9 @@ int main(int argc, char* argv[]) {
         FieldExtractionService service("host=127.0.0.1 dbname=postgres user=postgres");
         
         string ocrText = readTextFile(filePath);
-        auto fields = service.extractAndSave(docId, ocrText);
+        string result = service.extractAndSave(docId, ocrText);
         
-        for (const auto& f : fields) {
-            cout << f.fieldName << ": " << f.fieldValue << endl;
-        }
+        cout << result << endl;
         
     } catch (const exception& e) {
         cerr << "Error: " << e.what() << endl;

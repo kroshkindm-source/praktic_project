@@ -6,4 +6,6 @@
     {{ form.as_p }}
     <button type="submit" class="btn">Войти</button>
 </form>
+<p style="margin-top:15px;">Нет аккаунта? <a href="{% url 'register' %}">Зарегистрироваться</a></p>
+<p style="margin-top:5px; font-size:12px; color:#999;">Для регистрации администратора обратитесь к системному администратору.</p>
 {% endblock %}

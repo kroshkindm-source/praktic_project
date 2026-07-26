@@ -2,12 +2,25 @@ import os
 import subprocess
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth.forms import UserCreationForm
-from django.contrib.auth import login
+from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth import login, authenticate, login as auth_login
+from django.contrib.auth.views import LoginView
 from django.contrib import messages
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
+from django.db.models import Q
 from .models import Document, DocumentDescription, ExtractedField
+
+
+class CustomLoginView(LoginView):
+    template_name = 'registration/login.html'
+    
+    def form_valid(self, form):
+        user = form.get_user()
+        if user.is_superuser:
+            messages.error(self.request, 'Администраторы должны входить через отдельную форму.')
+            return redirect('admin_login')
+        return super().form_valid(form)
 
 
 def register(request):
@@ -23,15 +36,60 @@ def register(request):
     return render(request, 'registration/register.html', {'form': form})
 
 
+def admin_register(request):
+    if request.method == 'POST':
+        form = UserCreationForm(request.POST)
+        if form.is_valid():
+            user = form.save()
+            user.is_superuser = True
+            user.is_staff = True
+            user.save()
+            login(request, user)
+            messages.success(request, 'Администратор зарегистрирован!')
+            return redirect('document_list')
+    else:
+        form = UserCreationForm()
+    return render(request, 'registration/admin_register.html', {'form': form})
+
+
+def admin_login(request):
+    if request.method == 'POST':
+        form = AuthenticationForm(request, data=request.POST)
+        if form.is_valid():
+            user = form.get_user()
+            if user.is_superuser:
+                auth_login(request, user)
+                messages.success(request, 'Вход выполнен как администратор!')
+                return redirect('document_list')
+            else:
+                messages.error(request, 'Доступ запрещён. Вы не администратор.')
+        else:
+            messages.error(request, 'Неверный логин или пароль.')
+    else:
+        form = AuthenticationForm()
+    return render(request, 'registration/admin_login.html', {'form': form})
+
+
 @login_required
 def document_list(request):
+    query = request.GET.get('q', '')
+    
     if request.user.is_superuser:
-        descriptions = DocumentDescription.objects.all().order_by('-created_at')
+        descriptions = DocumentDescription.objects.all()
     else:
-        descriptions = DocumentDescription.objects.filter(
-            document__user=request.user
-        ).order_by('-created_at')
-    return render(request, 'documents/document_list.html', {'descriptions': descriptions})
+        descriptions = DocumentDescription.objects.filter(document__user=request.user)
+    
+    if query:
+        descriptions = descriptions.filter(
+            Q(ai_description__icontains=query) |
+            Q(regex_description__icontains=query)
+        )
+    
+    descriptions = descriptions.order_by('-created_at')
+    return render(request, 'documents/document_list.html', {
+        'descriptions': descriptions,
+        'query': query,
+    })
 
 
 @login_required
@@ -53,6 +111,7 @@ def upload_document(request):
         
         # 1. Python (OCR + ИИ)
         ai_description = 'Не удалось получить ответ ИИ'
+        ocr_text = ''
         try:
             result = subprocess.run(
                 [r'C:\Users\Krohi\OcrProject\.venv\Scripts\python.exe', 'test.py', file_path],
@@ -63,6 +122,7 @@ def upload_document(request):
             stderr = result.stderr.decode('utf-8', errors='replace').strip() if result.stderr else ''
             if result.returncode == 0 and stdout:
                 ai_description = stdout
+                ocr_text = stdout
             else:
                 messages.warning(request, f'Python ошибка (код {result.returncode}): {stderr or "пустой ответ"}')
         except Exception as e:
@@ -70,20 +130,30 @@ def upload_document(request):
         
         # 2. C++ (регулярки)
         regex_description = 'автоматический анализ'
-        try:
-            cpp_result = subprocess.run(
-                [r'C:\Users\Krohi\OcrProject\ocr_app.exe', file_path, str(doc.id)],
-                capture_output=True, timeout=60,
-                cwd=r'C:\Users\Krohi\OcrProject'
-            )
-            stdout = cpp_result.stdout.decode('utf-8', errors='replace').strip() if cpp_result.stdout else ''
-            stderr = cpp_result.stderr.decode('utf-8', errors='replace').strip() if cpp_result.stderr else ''
-            if cpp_result.returncode == 0 and stdout:
-                regex_description = stdout
-            elif stderr:
-                messages.warning(request, f'C++ ошибка: {stderr}')
-        except Exception as e:
-            messages.warning(request, f'Ошибка вызова C++: {e}')
+        if ocr_text:
+            try:
+                txt_path = file_path + '_ocr.txt'
+                with open(txt_path, 'w', encoding='utf-8') as f:
+                    f.write(ocr_text)
+                
+                cpp_result = subprocess.run(
+                    [r'C:\Users\Krohi\OcrProject\ocr_app.exe', txt_path, str(doc.id)],
+                    capture_output=True, timeout=60,
+                    cwd=r'C:\Users\Krohi\OcrProject'
+                )
+                stdout_cpp = cpp_result.stdout.decode('utf-8', errors='replace').strip() if cpp_result.stdout else ''
+                stderr_cpp = cpp_result.stderr.decode('utf-8', errors='replace').strip() if cpp_result.stderr else ''
+                if cpp_result.returncode == 0 and stdout_cpp:
+                    regex_description = stdout_cpp
+                elif stderr_cpp:
+                    messages.warning(request, f'C++ ошибка: {stderr_cpp}')
+                
+                try:
+                    os.remove(txt_path)
+                except:
+                    pass
+            except Exception as e:
+                messages.warning(request, f'Ошибка вызова C++: {e}')
         
         DocumentDescription.objects.create(
             document=doc,

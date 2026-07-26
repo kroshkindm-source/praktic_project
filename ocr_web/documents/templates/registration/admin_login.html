@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Вход для администратора</h2>
+<p style="color:#e74c3c; margin-bottom:15px;">Только для зарегистрированных администраторов системы.</p>
+<form method="post" style="max-width:400px;margin-top:20px;">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit" class="btn" style="background:#e74c3c;">Войти как администратор</button>
+</form>
+<p style="margin-top:15px;"><a href="{% url 'login' %}">← Обычный вход</a></p>
+{% endblock %}

@@ -1,27 +1,58 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Документ #{{ desc.document_id }}</h2>
-<p><strong>Файл:</strong> {{ desc.document.original_filename }}</p>
-<p><strong>Тип:</strong> {{ desc.document.file_type }}</p>
-<p><strong>Дата:</strong> {{ desc.created_at|date:"d.m.Y H:i" }}</p>
 
-<h3>Описание от ИИ:</h3>
-<pre style="background:#f8f9fa;padding:10px;overflow-x:auto;">{{ desc.ai_description }}</pre>
+<div style="display:flex; gap:30px; margin-top:20px; flex-wrap:wrap;">
+    
+    <!-- Левая колонка: изображение -->
+    <div style="flex:1; min-width:300px;">
+        {% if desc.document.file_path %}
+        <div style="border:1px solid #ddd; border-radius:5px; padding:10px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
+            <img src="/media/{{ desc.document.original_filename }}" alt="Документ" 
+                 style="width:100%; max-height:700px; object-fit:contain; cursor:pointer;"
+                 onclick="this.requestFullscreen ? this.requestFullscreen() : this.webkitRequestFullscreen();"
+                 title="Нажмите для полноэкранного режима">
+        </div>
+        <p style="text-align:center; color:#999; margin-top:5px; font-size:12px;">Нажмите на изображение для увеличения</p>
+        {% else %}
+        <div style="border:1px solid #ddd; border-radius:5px; padding:20px; text-align:center; color:#999; background:white;">
+            Изображение отсутствует
+        </div>
+        {% endif %}
+    </div>
 
-<h3>Regex-описание:</h3>
-<pre style="background:#f8f9fa;padding:10px;overflow-x:auto;">{{ desc.regex_description }}</pre>
+    <!-- Правая колонка: информация -->
+    <div style="flex:1; min-width:300px;">
+        <p><strong>Файл:</strong> {{ desc.document.original_filename }}</p>
+        <p><strong>Тип:</strong> {{ desc.document.file_type }}</p>
+        <p><strong>Размер:</strong> {{ desc.document.file_size }} байт</p>
+        <p><strong>Дата загрузки:</strong> {{ desc.created_at|date:"d.m.Y H:i" }}</p>
 
-{% if fields %}
-<h3>Извлечённые поля</h3>
-<table>
-    <thead><tr><th>Поле</th><th>Значение</th></tr></thead>
-    <tbody>
-        {% for f in fields %}
-        <tr><td>{{ f.field_name }}</td><td>{{ f.field_value }}</td></tr>
-        {% endfor %}
-    </tbody>
-</table>
-{% endif %}
+        <h3 style="margin-top:20px;">Описание от ИИ:</h3>
+        <pre style="background:#f8f9fa;padding:10px;overflow-x:auto;max-height:300px;overflow-y:auto;white-space:pre-wrap;">{{ desc.ai_description }}</pre>
 
-<a href="{% url 'document_list' %}" class="btn" style="margin-top:20px;">← Назад</a>
+        <h3>Regex-описание:</h3>
+        <pre style="background:#f8f9fa;padding:10px;overflow-x:auto;max-height:150px;overflow-y:auto;white-space:pre-wrap;">{{ desc.regex_description }}</pre>
+
+        {% if fields %}
+        <h3>Извлечённые поля</h3>
+        <table>
+            <thead><tr><th>Поле</th><th>Значение</th></tr></thead>
+            <tbody>
+                {% for f in fields %}
+                <tr><td>{{ f.field_name }}</td><td>{{ f.field_value }}</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </div>
+
+</div>
+
+<div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
+    <a href="/media/{{ desc.document.original_filename }}" download class="btn" style="background:#27ae60;">Скачать</a>
+    <a href="/media/{{ desc.document.original_filename }}" target="_blank" class="btn" style="background:#e67e22;">Открыть полностью</a>
+    <button onclick="window.print()" class="btn" style="background:#8e44ad;">Печать</button>
+    <a href="{% url 'document_list' %}" class="btn" style="background:#95a5a6;">← Назад</a>
+</div>
 {% endblock %}

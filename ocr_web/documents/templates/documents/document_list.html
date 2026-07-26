@@ -1,7 +1,20 @@
 {% extends 'base.html' %}
 {% block content %}
 <h2>Описания документов</h2>
-<a href="{% url 'upload_document' %}" class="btn" style="margin:20px 0;">+ Добавить документ</a>
+
+<div style="display:flex; justify-content:space-between; align-items:center; margin:20px 0;">
+    <a href="{% url 'upload_document' %}" class="btn">+ Добавить документ</a>
+    
+    <form method="get" style="display:flex; gap:10px;">
+        <input type="text" name="q" placeholder="Поиск по описаниям..." value="{{ query }}" 
+               style="padding:10px; border:1px solid #ddd; border-radius:5px; width:300px;">
+        <button type="submit" class="btn">Найти</button>
+        {% if query %}
+        <a href="{% url 'document_list' %}" class="btn" style="background:#95a5a6;">Сбросить</a>
+        {% endif %}
+    </form>
+</div>
+
 <table>
     <thead>
         <tr>
@@ -30,7 +43,13 @@
             </td>
         </tr>
         {% empty %}
-        <tr><td colspan="6">Описаний пока нет.</td></tr>
+        <tr><td colspan="6">
+            {% if query %}
+            Ничего не найдено по запросу «{{ query }}».
+            {% else %}
+            Описаний пока нет.
+            {% endif %}
+        </td></tr>
         {% endfor %}
     </tbody>
 </table>
