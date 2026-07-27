@@ -3,12 +3,30 @@ import sys
 import io
 import requests
 from dotenv import load_dotenv
+from PIL import Image, ImageEnhance, ImageFilter
+import pytesseract
 
-# НЕ переопределяем sys.stdout — subprocess не сможет читать
-# Вместо этого просто задаём кодировку для консоли
 if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8')
     sys.stderr.reconfigure(encoding='utf-8')
+
+# Путь к Tesseract
+pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+
+# Путь к улучшенным языковым моделям
+os.environ['TESSDATA_PREFIX'] = r'C:\Users\Krohi\OcrProject\ocr_web\tessdata'
+
+
+def preprocess_image(image_path):
+    """Улучшает качество изображения перед OCR."""
+    img = Image.open(image_path)
+    img = img.convert('L')
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(2.0)
+    img = img.filter(ImageFilter.SHARPEN)
+    img = img.point(lambda x: 255 if x > 128 else 0)
+    return img
+
 
 def process_text_with_ai(file_path):
     file_path = file_path.strip('"').strip("'")
@@ -23,22 +41,18 @@ def process_text_with_ai(file_path):
         sys.exit(1)
     
     # Читаем файл
+    ocr_text = ''
     try:
         if not os.path.exists(file_path):
             print(f"Ошибка: Файл не найден: {file_path}", file=sys.stderr)
             sys.exit(1)
         
-        # Пробуем читать как текст
         with open(file_path, 'r', encoding='utf-8') as f:
             ocr_text = f.read()
     except UnicodeDecodeError:
-        # Если не текст — OCR через pytesseract
         try:
-            import pytesseract
-            from PIL import Image
-            pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-            img = Image.open(file_path)
-            ocr_text = pytesseract.image_to_string(img, lang='rus+eng')
+            img = preprocess_image(file_path)
+            ocr_text = pytesseract.image_to_string(img, lang='rus+eng', config='--psm 6')
         except Exception as e:
             print(f"Ошибка OCR: {e}", file=sys.stderr)
             sys.exit(1)
@@ -49,9 +63,11 @@ def process_text_with_ai(file_path):
     
     # Запрос к YandexGPT
     prompt = (
-        "Ты — ИИ-аналитик. Извлеки данные из текста в формате 'ключ: значение'.\n"
-        "Правила: только формат 'ключ: значение', без вводных слов и пояснений.\n"
-        "Извлекай только самую ключевую информацию по типу дат, имён, адресов, сумм\n"
+        "Прочитай текст документа и выпиши из него все значимые данные.\n"
+        "Пиши в формате: что_найдено: значение\n"
+        "Не придумывай то, чего нет в тексте.\n"
+        "Если какая-то информация не найдена — просто не упоминай её.\n"
+        "Не используй вводные слова и пояснения, пиши только информацию с файла, абсолютно никаких вводных слов, в начале не пиши фразу: что_найдено: значчение.\n"
         f"Текст:\n{ocr_text}"
     )
     

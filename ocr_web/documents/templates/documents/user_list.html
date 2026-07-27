@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<h2>Пользователи системы</h2>
+
+<table style="margin-top:20px;">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Логин</th>
+            <th>Админ</th>
+            <th>Дата регистрации</th>
+            <th>Последний вход</th>
+            <th>Действия</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for u in users %}
+        <tr>
+            <td>{{ u.id }}</td>
+            <td>{{ u.username }}</td>
+            <td>{% if u.is_superuser %}Да{% else %}Нет{% endif %}</td>
+            <td>{{ u.date_joined|date:"d.m.Y H:i" }}</td>
+            <td>{{ u.last_login|date:"d.m.Y H:i"|default:"—" }}</td>
+            <td>
+                {% if not u.is_superuser %}
+                <a href="{% url 'delete_user' u.id %}" 
+                   onclick="return confirm('Удалить пользователя {{ u.username }}?')"
+                   class="btn btn-danger" style="padding:5px 12px; font-size:13px;">Удалить</a>
+                {% else %}
+                —
+                {% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+<a href="{% url 'document_list' %}" class="btn" style="margin-top:20px; background:#95a5a6;">← Назад к документам</a>
+{% endblock %}

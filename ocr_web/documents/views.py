@@ -1,10 +1,11 @@
 import os
 import subprocess
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth import login, authenticate, login as auth_login
 from django.contrib.auth.views import LoginView
+from django.contrib.auth.models import User
 from django.contrib import messages
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
@@ -15,6 +16,11 @@ from .models import Document, DocumentDescription, ExtractedField
 class CustomLoginView(LoginView):
     template_name = 'registration/login.html'
     
+    def dispatch(self, request, *args, **kwargs):
+        if request.user.is_authenticated:
+            return redirect('document_list')
+        return super().dispatch(request, *args, **kwargs)
+    
     def form_valid(self, form):
         user = form.get_user()
         if user.is_superuser:
@@ -24,6 +30,8 @@ class CustomLoginView(LoginView):
 
 
 def register(request):
+    if request.user.is_authenticated:
+        return redirect('document_list')
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
@@ -37,6 +45,8 @@ def register(request):
 
 
 def admin_register(request):
+    if request.user.is_authenticated:
+        return redirect('document_list')
     if request.method == 'POST':
         form = UserCreationForm(request.POST)
         if form.is_valid():
@@ -53,6 +63,8 @@ def admin_register(request):
 
 
 def admin_login(request):
+    if request.user.is_authenticated:
+        return redirect('document_list')
     if request.method == 'POST':
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
@@ -103,6 +115,25 @@ def delete_document(request, doc_id):
     doc.delete()
     messages.success(request, f'Документ #{doc_id} удалён.')
     return redirect('document_list')
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def user_list(request):
+    users = User.objects.all().order_by('-date_joined')
+    return render(request, 'documents/user_list.html', {'users': users})
+
+
+@login_required
+@user_passes_test(lambda u: u.is_superuser)
+def delete_user(request, user_id):
+    user = get_object_or_404(User, id=user_id)
+    if user.is_superuser:
+        messages.error(request, 'Нельзя удалить администратора.')
+    else:
+        user.delete()
+        messages.success(request, f'Пользователь {user.username} удалён.')
+    return redirect('user_list')
 
 
 @login_required

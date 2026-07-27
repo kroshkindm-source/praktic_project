@@ -1,19 +1,23 @@
 {% extends 'base.html' %}
 {% block content %}
-<h2>Документ #{{ desc.document_id }}</h2>
 
-<div style="display:flex; gap:30px; margin-top:20px; flex-wrap:wrap;">
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;" class="no-print">
+    <h2>Документ #{{ desc.document_id }}</h2>
+    <a href="{% url 'document_list' %}" class="btn" style="background:#e74c3c; padding:8px 20px; font-size:14px;">← Назад</a>
+</div>
+
+<div style="display:flex; gap:30px; flex-wrap:wrap;">
     
     <!-- Левая колонка: изображение -->
     <div style="flex:1; min-width:300px;">
         {% if desc.document.file_path %}
-        <div style="border:1px solid #ddd; border-radius:5px; padding:10px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.1);">
-            <img src="/media/{{ desc.document.original_filename }}" alt="Документ" 
+        <div style="border:1px solid #ddd; border-radius:5px; padding:10px; background:white; box-shadow:0 2px 10px rgba(0,0,0,0.1);" id="imageContainer">
+            <img src="/media/{{ desc.document.original_filename }}" alt="Документ" id="documentImage"
                  style="width:100%; max-height:700px; object-fit:contain; cursor:pointer;"
                  onclick="this.requestFullscreen ? this.requestFullscreen() : this.webkitRequestFullscreen();"
                  title="Нажмите для полноэкранного режима">
         </div>
-        <p style="text-align:center; color:#999; margin-top:5px; font-size:12px;">Нажмите на изображение для увеличения</p>
+        <p style="text-align:center; color:#999; margin-top:5px; font-size:12px;" class="no-print">Нажмите на изображение для увеличения</p>
         {% else %}
         <div style="border:1px solid #ddd; border-radius:5px; padding:20px; text-align:center; color:#999; background:white;">
             Изображение отсутствует
@@ -22,7 +26,7 @@
     </div>
 
     <!-- Правая колонка: информация -->
-    <div style="flex:1; min-width:300px;">
+    <div style="flex:1; min-width:300px;" class="no-print">
         <p><strong>Файл:</strong> {{ desc.document.original_filename }}</p>
         <p><strong>Тип:</strong> {{ desc.document.file_type }}</p>
         <p><strong>Размер:</strong> {{ desc.document.file_size }} байт</p>
@@ -49,10 +53,31 @@
 
 </div>
 
-<div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;">
+<div style="display:flex; gap:10px; margin-top:20px; flex-wrap:wrap;" class="no-print">
     <a href="/media/{{ desc.document.original_filename }}" download class="btn" style="background:#27ae60;">Скачать</a>
     <a href="/media/{{ desc.document.original_filename }}" target="_blank" class="btn" style="background:#e67e22;">Открыть полностью</a>
-    <button onclick="window.print()" class="btn" style="background:#8e44ad;">Печать</button>
-    <a href="{% url 'document_list' %}" class="btn" style="background:#95a5a6;">← Назад</a>
+    <button onclick="printDocument()" class="btn" style="background:#8e44ad;">Печать</button>
 </div>
+
+<script>
+function printDocument() {
+    var img = document.getElementById('documentImage');
+    if (!img) return;
+    var win = window.open('');
+    win.document.write('<html><head><title>Печать документа</title><style>body{margin:0;display:flex;justify-content:center;align-items:center;min-height:100vh;}img{max-width:100%;max-height:100vh;object-fit:contain;}</style></head><body>');
+    win.document.write('<img src="' + img.src + '" onload="window.print();window.close();">');
+    win.document.write('</body></html>');
+    win.document.close();
+}
+</script>
+
+<style>
+@media print {
+    .no-print { display: none !important; }
+    body { background: white; margin: 0; padding: 0; }
+    .container { max-width: 100%; margin: 0; padding: 0; }
+    #imageContainer { border: none; box-shadow: none; padding: 0; }
+    #documentImage { max-height: 100vh; }
+}
+</style>
 {% endblock %}
